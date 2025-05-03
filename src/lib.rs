@@ -24,13 +24,13 @@ impl SHA256 {
 
     #[inline(always)]
     fn required_capacity(len: usize) -> usize {
-        ((len + 9) / 64) * 64
+        (len + 1).div_ceil(64) * 64
     }
 
     pub fn update(&mut self, new_data: &[u8]) {
         let new_len = self.length + new_data.len();
         let required = SHA256::required_capacity(new_len);
-        if required > self.digest.capacity() {
+        if required > self.digest.len() {
             self.digest.resize(required, 0);
         }
         self.digest[self.length..new_len].copy_from_slice(new_data);
@@ -41,12 +41,13 @@ impl SHA256 {
     pub fn produce(&mut self) -> [u8; 32] {
         let (mut h0, mut h1, mut h2, mut h3, mut h4, mut h5, mut h6, mut h7) =
             SHA256::init_working_vars();
+        const K_CONSTS: [u32; 64] = SHA256::init_k_consts();
         let digest_len = self.digest.len();
-        self.digest[digest_len - 8..].copy_from_slice(((self.length * 8) as u64).to_be_bytes().as_ref());
+        self.digest[digest_len - 8..]
+            .copy_from_slice(((self.length * 8) as u64).to_be_bytes().as_ref());
 
         for i in 0..digest_len.div_ceil(64) {
             let digest_slice = self.digest[(i * 64)..((i + 1) * 64)].as_ref();
-            println!("{:?}", digest_slice);
             let mut schedule = [0u32; 64];
             for index in 0..16 {
                 let lower = 4 * index;
@@ -71,8 +72,7 @@ impl SHA256 {
             }
 
             let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h) =
-                SHA256::init_working_vars();
-            let k_consts = SHA256::init_k_consts();
+                (h0, h1, h2, h3, h4, h5, h6, h7);
 
             for index in 0..64 {
                 let (a1, a2, a3) = (a.clone(), a.clone(), a.clone());
@@ -84,7 +84,7 @@ impl SHA256 {
                 let temp1 = h
                     .wrapping_add(sigma1)
                     .wrapping_add(choice)
-                    .wrapping_add(k_consts[index])
+                    .wrapping_add(K_CONSTS[index])
                     .wrapping_add(schedule[index]);
                 let temp2 = sigma0.wrapping_add(majority);
                 h = g;
@@ -146,10 +146,17 @@ mod tests {
     #[test]
     fn it_works() {
         let mut hasher = SHA256::new(None);
-        hasher.update(&[1]);
+        hasher.update(&[
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1,
+        ]);
         let mut test_hasher = sha2::Sha256::new();
-        test_hasher.update(&[1]);
-        println!("my: {:?}", hasher.digest);
+        test_hasher.update(&[
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1,
+        ]);
         assert_eq!(
             hasher.produce().as_slice(),
             test_hasher.finalize().as_slice()
